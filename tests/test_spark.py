@@ -1056,7 +1056,6 @@ def test_negative_tolerances(spark, base_tol, compare_both_tol):
             abs_tol=0.01,
         )
         comp.report()
-        pass
 
 
 def test_show_all_columns_and_match_rate(show_all_columns_and_match_rate):
@@ -1095,7 +1094,7 @@ def test_decimal_comparisons():
 def test_decimal_comparator_acts_like_string():
     acc = False
     for t in datacompy.NUMERIC_SPARK_TYPES:
-        acc = acc or (len(t) > 2 and t[0:3] == "dec")
+        acc = acc or len(t) > 2 and t[:3] == "dec"
     assert acc
 
 

@@ -367,7 +367,7 @@ def report(
         "column_comparison.txt",
         len([col for col in column_stats if col["unequal_cnt"] > 0]),
         len([col for col in column_stats if col["unequal_cnt"] == 0]),
-        sum([col["unequal_cnt"] for col in column_stats]),
+        sum(col["unequal_cnt"] for col in column_stats),
     )
 
     match_stats = []
@@ -415,7 +415,7 @@ def report(
     df1_unq_rows_samples = [
         r["df1_unq_rows_sample"] for r in res if r["df1_unq_rows_sample"] is not None
     ]
-    if len(df1_unq_rows_samples) > 0:
+    if df1_unq_rows_samples:
         rpt += f"Sample Rows Only in {df1_name} (First {column_count} Columns)\n"
         rpt += f"---------------------------------------{'-' * len(df1_name)}\n"
         rpt += "\n"
@@ -427,7 +427,7 @@ def report(
     df2_unq_rows_samples = [
         r["df2_unq_rows_sample"] for r in res if r["df2_unq_rows_sample"] is not None
     ]
-    if len(df2_unq_rows_samples) > 0:
+    if df2_unq_rows_samples:
         rpt += f"Sample Rows Only in {df2_name} (First {column_count} Columns)\n"
         rpt += f"---------------------------------------{'-' * len(df2_name)}\n"
         rpt += "\n"
@@ -510,11 +510,7 @@ def _distributed_compare(
     tdf1 = fa.as_fugue_df(df1)
     tdf2 = fa.as_fugue_df(df2)
 
-    if isinstance(join_columns, str):
-        hash_cols = [join_columns]
-    else:
-        hash_cols = join_columns
-
+    hash_cols = [join_columns] if isinstance(join_columns, str) else join_columns
     if cast_column_names_lower:
         tdf1 = tdf1.rename(
             {col: col.lower() for col in tdf1.schema.names if col != col.lower()}
@@ -534,7 +530,7 @@ def _distributed_compare(
 
     df1_schema = tdf1.schema
     df2_schema = tdf2.schema
-    str_cols = set(f.name for f in tdf1.schema.fields if pa.types.is_string(f.type))
+    str_cols = {f.name for f in tdf1.schema.fields if pa.types.is_string(f.type)}
     bucket = (
         parallelism if parallelism is not None else fa.get_current_parallelism() * 2
     )
@@ -572,10 +568,10 @@ def _distributed_compare(
     )
 
     def _deserialize(
-        df: List[Dict[str, Any]], left: bool, schema: Schema
-    ) -> pd.DataFrame:
+            df: List[Dict[str, Any]], left: bool, schema: Schema
+        ) -> pd.DataFrame:
         arr = [pickle.loads(r["data"]) for r in df if r["left"] == left]
-        if len(arr) > 0:
+        if arr:
             return pd.concat(arr).sort_values(schema.names).reset_index(drop=True)
         return pd.DataFrame(
             {k: pd.Series(dtype=v) for k, v in schema.pandas_dtype.items()}
