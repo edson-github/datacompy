@@ -1070,8 +1070,8 @@ def test_all_mismatch_ignore_matching_cols_some_cols_matching_diff_rows():
     assert (output.date_fld_df1 != output.date_fld_df2).values.sum() == 4
     assert (~(output.date_fld_df1 != output.date_fld_df2)).values.sum() == 0
 
-    assert not ("name_df1" in output and "name_df2" in output)
-    assert not ("dollar_amt_df1" in output and "dollar_amt_df1" in output)
+    assert "name_df1" not in output or "name_df2" not in output
+    assert "dollar_amt_df1" not in output or "dollar_amt_df1" not in output
 
 
 def test_all_mismatch_ignore_matching_cols_some_calls_matching():
@@ -1108,8 +1108,8 @@ def test_all_mismatch_ignore_matching_cols_some_calls_matching():
     assert (output.date_fld_df1 != output.date_fld_df2).values.sum() == 4
     assert (~(output.date_fld_df1 != output.date_fld_df2)).values.sum() == 0
 
-    assert not ("name_df1" in output and "name_df2" in output)
-    assert not ("dollar_amt_df1" in output and "dollar_amt_df1" in output)
+    assert "name_df1" not in output or "name_df2" not in output
+    assert "dollar_amt_df1" not in output or "dollar_amt_df1" not in output
 
 
 def test_all_mismatch_ignore_matching_cols_no_cols_matching():

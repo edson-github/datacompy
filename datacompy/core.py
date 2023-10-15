@@ -176,11 +176,10 @@ class Compare:
         if self.on_index:
             if dataframe.index.duplicated().sum() > 0:
                 self._any_dupes = True
-        else:
-            if len(dataframe.drop_duplicates(subset=self.join_columns)) < len(
+        elif len(dataframe.drop_duplicates(subset=self.join_columns)) < len(
                 dataframe
             ):
-                self._any_dupes = True
+            self._any_dupes = True
 
     def _compare(self, ignore_spaces, ignore_case):
         """Actually run the comparison.  This tries to run df1.equals(df2)
@@ -342,10 +341,7 @@ class Compare:
                     ^ (self.intersect_rows[col_2].isnull())
                 ).sum()
 
-            if row_cnt > 0:
-                match_rate = float(match_cnt) / row_cnt
-            else:
-                match_rate = 0
+            match_rate = float(match_cnt) / row_cnt if row_cnt > 0 else 0
             LOG.info(f"{column}: {match_cnt} / {row_cnt} ({match_rate:.2%}) match")
 
             self.column_stats.append(
@@ -390,10 +386,11 @@ class Compare:
         int
             Number of matching rows
         """
-        match_columns = []
-        for column in self.intersect_columns():
-            if column not in self.join_columns:
-                match_columns.append(column + "_match")
+        match_columns = [
+            column + "_match"
+            for column in self.intersect_columns()
+            if column not in self.join_columns
+        ]
         return self.intersect_rows[match_columns].all(axis=1).sum()
 
     def intersect_rows_match(self):
@@ -425,9 +422,9 @@ class Compare:
         dataframe 1, and all of its rows match rows in dataframe 1 for the
         shared columns.
         """
-        if not self.df2_unq_columns() == set():
+        if self.df2_unq_columns() != set():
             return False
-        elif not len(self.df2_unq_rows) == 0:
+        elif len(self.df2_unq_rows) != 0:
             return False
         elif not self.intersect_rows_match():
             return False
@@ -504,7 +501,7 @@ class Compare:
                     LOG.debug(f"Adding column {orig_col_name} to the result.")
                     match_list.append(col)
                     return_list.extend([orig_col_name + "_df1", orig_col_name + "_df2"])
-                elif ignore_matching_cols:
+                else:
                     LOG.debug(
                         f"Column {orig_col_name} is equal in df1 and df2. It will not be added to the result."
                     )
@@ -561,10 +558,7 @@ class Compare:
         )
 
         # Row Summary
-        if self.on_index:
-            match_on = "index"
-        else:
-            match_on = ", ".join(self.join_columns)
+        match_on = "index" if self.on_index else ", ".join(self.join_columns)
         report += render(
             "row_summary.txt",
             match_on,
@@ -586,7 +580,7 @@ class Compare:
             "column_comparison.txt",
             len([col for col in self.column_stats if col["unequal_cnt"] > 0]),
             len([col for col in self.column_stats if col["unequal_cnt"] == 0]),
-            sum([col["unequal_cnt"] for col in self.column_stats]),
+            sum(col["unequal_cnt"] for col in self.column_stats),
         )
 
         match_stats = []
@@ -898,16 +892,15 @@ def generate_id_within_group(dataframe, join_columns):
     Pandas.Series
         The ID column that's unique in each group.
     """
-    default_value = "DATACOMPY_NULL"
-    if dataframe[join_columns].isnull().any().any():
-        if (dataframe[join_columns] == default_value).any().any():
-            raise ValueError(f"{default_value} was found in your join columns")
-        return (
-            dataframe[join_columns]
-            .astype(str)
-            .fillna(default_value)
-            .groupby(join_columns)
-            .cumcount()
-        )
-    else:
+    if not dataframe[join_columns].isnull().any().any():
         return dataframe[join_columns].groupby(join_columns).cumcount()
+    default_value = "DATACOMPY_NULL"
+    if (dataframe[join_columns] == default_value).any().any():
+        raise ValueError(f"{default_value} was found in your join columns")
+    return (
+        dataframe[join_columns]
+        .astype(str)
+        .fillna(default_value)
+        .groupby(join_columns)
+        .cumcount()
+    )

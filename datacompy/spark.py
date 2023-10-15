@@ -30,9 +30,13 @@ class MatchType(Enum):
 
 # Used for checking equality with decimal(X, Y) types. Otherwise treated as the string "decimal".
 def decimal_comparator():
+
+
+
     class DecimalComparator(str):
         def __eq__(self, other):
-            return len(other) >= 7 and other[0:7] == "decimal"
+            return len(other) >= 7 and other[:7] == "decimal"
+
 
     return DecimalComparator("decimal")
 
@@ -314,7 +318,7 @@ class SparkCompare:
         format_pattern = f"{{:{max_length}s}}"
 
         print(f"\n****** Columns In {base_or_compare.title()} Only ******", file=myfile)
-        print((format_pattern + "  Dtype").format("Column Name"), file=myfile)
+        print(f"{format_pattern}  Dtype".format("Column Name"), file=myfile)
         print("-" * max_length + "  -------------", file=myfile)
 
         for column in columns:
@@ -373,11 +377,9 @@ class SparkCompare:
             base_rows.createOrReplaceTempView("baseRows")
             self.base_df.createOrReplaceTempView("baseTable")
             join_condition = " AND ".join(
-                ["A." + name + "<=>B." + name for name in self._join_column_names]
+                [f"A.{name}<=>B.{name}" for name in self._join_column_names]
             )
-            sql_query = "select A.* from baseTable as A, baseRows as B where {}".format(
-                join_condition
-            )
+            sql_query = f"select A.* from baseTable as A, baseRows as B where {join_condition}"
             self._rows_only_base = self.spark.sql(sql_query)
 
             if self.cache_intermediates:
@@ -393,13 +395,9 @@ class SparkCompare:
             compare_rows.createOrReplaceTempView("compareRows")
             self.compare_df.createOrReplaceTempView("compareTable")
             where_condition = " AND ".join(
-                ["A." + name + "<=>B." + name for name in self._join_column_names]
+                [f"A.{name}<=>B.{name}" for name in self._join_column_names]
             )
-            sql_query = (
-                "select A.* from compareTable as A, compareRows as B where {}".format(
-                    where_condition
-                )
-            )
+            sql_query = f"select A.* from compareTable as A, compareRows as B where {where_condition}"
             self._rows_only_compare = self.spark.sql(sql_query)
 
             if self.cache_intermediates:
@@ -415,28 +413,33 @@ class SparkCompare:
         select_statement = ""
 
         for column_name in sorted_list:
-            if column_name in self.columns_compared:
-                if match_data:
-                    select_statement = select_statement + ",".join(
-                        [self._create_case_statement(name=column_name)]
-                    )
-                else:
-                    select_statement = select_statement + ",".join(
-                        [self._create_select_statement(name=column_name)]
-                    )
-            elif column_name in base_only:
-                select_statement = select_statement + ",".join(["A." + column_name])
-
-            elif column_name in compare_only:
-                if match_data:
-                    select_statement = select_statement + ",".join(["B." + column_name])
-                else:
-                    select_statement = select_statement + ",".join(["A." + column_name])
-            elif column_name in self._join_column_names:
-                select_statement = select_statement + ",".join(["A." + column_name])
-
+            if (
+                column_name not in self.columns_compared
+                and column_name not in base_only
+                and column_name in compare_only
+                and match_data
+            ):
+                select_statement = select_statement + ",".join([f"B.{column_name}"])
+            elif (
+                column_name not in self.columns_compared
+                and column_name not in base_only
+                and column_name in compare_only
+                or column_name not in self.columns_compared
+                and column_name in base_only
+                or column_name not in self.columns_compared
+                and column_name in self._join_column_names
+            ):
+                select_statement = select_statement + ",".join([f"A.{column_name}"])
+            elif column_name in self.columns_compared:
+                select_statement = (
+                    select_statement
+                    + ",".join([self._create_case_statement(name=column_name)])
+                    if match_data
+                    else select_statement
+                    + ",".join([self._create_select_statement(name=column_name)])
+                )
             if column_name != sorted_list[-1]:
-                select_statement = select_statement + " , "
+                select_statement = f"{select_statement} , "
 
         return select_statement
 
@@ -446,9 +449,7 @@ class SparkCompare:
         full_joined_dataframe.createOrReplaceTempView("full_matched_table")
 
         select_statement = self._generate_select_statement(False)
-        select_query = """SELECT {} FROM full_matched_table A""".format(
-            select_statement
-        )
+        select_query = f"""SELECT {select_statement} FROM full_matched_table A"""
 
         self._all_matched_rows = self.spark.sql(select_query).orderBy(
             self._join_column_names
@@ -456,9 +457,9 @@ class SparkCompare:
         self._all_matched_rows.createOrReplaceTempView("matched_table")
 
         where_cond = " OR ".join(
-            ["A." + name + "_match= False" for name in self.columns_compared]
+            [f"A.{name}_match= False" for name in self.columns_compared]
         )
-        mismatch_query = """SELECT * FROM matched_table A WHERE {}""".format(where_cond)
+        mismatch_query = f"""SELECT * FROM matched_table A WHERE {where_cond}"""
         self._all_rows_mismatched = self.spark.sql(mismatch_query).orderBy(
             self._join_column_names
         )
@@ -466,7 +467,7 @@ class SparkCompare:
     def _get_or_create_joined_dataframe(self):
         if self._joined_dataframe is None:
             join_condition = " AND ".join(
-                ["A." + name + "<=>B." + name for name in self._join_column_names]
+                [f"A.{name}<=>B.{name}" for name in self._join_column_names]
             )
             select_statement = self._generate_select_statement(match_data=True)
 
@@ -497,15 +498,11 @@ class SparkCompare:
 
         where_cond = " AND ".join(
             [
-                "A." + name + "=" + str(MatchType.MATCH.value)
+                f"A.{name}={str(MatchType.MATCH.value)}"
                 for name in self.columns_compared
             ]
         )
-        match_query = (
-            r"""SELECT count(*) AS row_count FROM matched_df A WHERE {}""".format(
-                where_cond
-            )
-        )
+        match_query = f"""SELECT count(*) AS row_count FROM matched_df A WHERE {where_cond}"""
         all_rows_matched = self.spark.sql(match_query)
         matched_rows = all_rows_matched.head()[0]
 
@@ -550,23 +547,23 @@ class SparkCompare:
             self.columns_match_dict[c] = match_data[c]
 
     def _create_select_statement(self, name):
-        if self._known_differences:
-            match_type_comparison = ""
-            for k in MatchType:
-                match_type_comparison += (
-                    " WHEN (A.{name}={match_value}) THEN '{match_name}'".format(
-                        name=name, match_value=str(k.value), match_name=k.name
-                    )
-                )
-            return "A.{name}_base, A.{name}_compare, (CASE WHEN (A.{name}={match_failure}) THEN False ELSE True END) AS {name}_match, (CASE {match_type_comparison} ELSE 'UNDEFINED' END) AS {name}_match_type ".format(
-                name=name,
-                match_failure=MatchType.MISMATCH.value,
-                match_type_comparison=match_type_comparison,
-            )
-        else:
+        if not self._known_differences:
             return "A.{name}_base, A.{name}_compare, CASE WHEN (A.{name}={match_failure})  THEN False ELSE True END AS {name}_match ".format(
                 name=name, match_failure=MatchType.MISMATCH.value
             )
+        match_type_comparison = "".join(
+            (
+                " WHEN (A.{name}={match_value}) THEN '{match_name}'".format(
+                    name=name, match_value=str(k.value), match_name=k.name
+                )
+            )
+            for k in MatchType
+        )
+        return "A.{name}_base, A.{name}_compare, (CASE WHEN (A.{name}={match_failure}) THEN False ELSE True END) AS {name}_match, (CASE {match_type_comparison} ELSE 'UNDEFINED' END) AS {name}_match_type ".format(
+            name=name,
+            match_failure=MatchType.MISMATCH.value,
+            match_type_comparison=match_type_comparison,
+        )
 
     def _create_case_statement(self, name):
         equal_comparisons = ["(A.{name} IS NULL AND B.{name} IS NULL)"]
@@ -665,7 +662,7 @@ class SparkCompare:
 
         print("\n****** Schema Differences ******", file=myfile)
         print(
-            (format_pattern + "  Base Dtype     Compare Dtype").format(
+            f"{format_pattern}  Base Dtype     Compare Dtype".format(
                 "Base Column Name", "Compare Column Name"
             ),
             file=myfile,
@@ -698,10 +695,10 @@ class SparkCompare:
         if base_name in self.column_mapping:
             return self.column_mapping[base_name]
         else:
-            for name in self.join_columns:
-                if base_name == name[0]:
-                    return name[1]
-            return base_name
+            return next(
+                (name[1] for name in self.join_columns if base_name == name[0]),
+                base_name,
+            )
 
     def _print_row_matches_by_column(self, myfile):
         self._populate_columns_match_dict()
